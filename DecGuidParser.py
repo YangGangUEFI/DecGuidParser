@@ -42,8 +42,15 @@ def extract_guids_from_file(file_path):
     
     return guids_data
 
-def scan_directory(directory_path):
-    """扫描目录查找所有.dec文件并提取GUID信息"""
+def scan_directory(directory_path, max_depth=1, current_depth=1):
+    """
+    递归扫描目录查找所有.dec文件并提取GUID信息
+    
+    参数:
+        directory_path: 要扫描的目录路径
+        max_depth: 最大递归深度，默认为1（只扫描直接子目录）
+        current_depth: 当前递归深度
+    """
     all_guids = {}
     directory = Path(directory_path)
     
@@ -51,7 +58,7 @@ def scan_directory(directory_path):
     subdirectories = [d for d in directory.iterdir() if d.is_dir()]
     
     for subdir in subdirectories:
-        # 查找子目录中的所有.dec文件
+        # 查找当前子目录中的所有.dec文件
         dec_files = list(subdir.glob('*.dec'))
         
         for dec_file in dec_files:
@@ -63,6 +70,16 @@ def scan_directory(directory_path):
                 # 如果存在重复，添加文件路径信息以区分
                 if guid_name in all_guids and all_guids[guid_name] != guid_value:
                     print(f"警告: 在{dec_file}中发现重复GUID: {guid_name}")
+                all_guids[guid_name] = guid_value
+        
+        # 如果未达到最大递归深度，继续递归扫描子目录
+        if current_depth < max_depth:
+            sub_guids = scan_directory(subdir, max_depth, current_depth + 1)
+            
+            # 合并子目录中的GUID到总结果中
+            for guid_name, guid_value in sub_guids.items():
+                if guid_name in all_guids and all_guids[guid_name] != guid_value:
+                    print(f"警告: 在子目录{subdir}中发现重复GUID: {guid_name}")
                 all_guids[guid_name] = guid_value
     
     return all_guids
@@ -76,12 +93,14 @@ def save_to_json(data, output_file):
 def main():
     parser = argparse.ArgumentParser(description='提取.dec文件中的GUID信息')
     parser.add_argument('directory', help='要扫描的目录路径')
+    parser.add_argument('--depth', '-d', type=int, default=1, 
+                        help='递归扫描的最大子目录深度，默认为1（只扫描直接子目录）')
     parser.add_argument('--output', '-o', default='guids.json', help='输出JSON文件的路径')
     
     args = parser.parse_args()
     
     # 扫描目录并提取GUID
-    guids_data = scan_directory(args.directory)
+    guids_data = scan_directory(args.directory, args.depth)
     
     # 保存结果到JSON文件
     save_to_json(guids_data, args.output)
